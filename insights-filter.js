@@ -15,18 +15,12 @@
      [data-filter-list]    the posts .w-dyn-items container        (required)
      [data-filter-item]    each post card  (the Collection Item)   (required)
      [data-filter-chip]    each category chip / Collection Item     (required)
-     [data-filter-clear]   the "Clear" chip                         (optional)
-     [data-filter-all]     an existing "All" chip                   (optional)
+     [data-filter-clear]   the "Clear" chip (resets to show all)    (optional)
      [data-category]       slug — on every chip AND every card, or a descendant
      [data-filter-empty]   optional empty-state element
 
-   ── Extras (attributes on [data-filter-bar]) ─────────────────
-     [data-filter-all-label]  synthesise an "All" chip by cloning the
-                              first chip and relabelling it. Value = the
-                              label text ("All" if left blank). Use this
-                              when a static All chip can't live inside the
-                              CMS chips list.
-     [data-filter-debug]      verbose per-render console logging.
+   ── Extra (attribute on [data-filter-bar]) ───────────────────
+     [data-filter-debug]   verbose per-render console logging.
 
    Paste inside <script defer> in
    Page Settings → Custom Code → Before </body>, or load from CDN.
@@ -91,12 +85,6 @@
     return categoriesOf(el)[0] || '';
   }
 
-  function isAllChip(chip) {
-    if (chip.hasAttribute('data-filter-all')) return true;
-    var slug = firstCategoryOf(chip);
-    return slug === 'all' || slug === '';
-  }
-
   // The element that actually carries the .chip styling — the hook may be on
   // a wrapper, so state classes must land on the styled child, not the wrapper.
   function faceOf(el) {
@@ -108,15 +96,6 @@
   function anchorOf(el) {
     if (el.tagName === 'A') return el;
     return el.querySelector('a');
-  }
-
-  function stripWebflowIds(root) {
-    var all = [root].concat(Array.prototype.slice.call(root.querySelectorAll('*')));
-    all.forEach(function (n) {
-      n.removeAttribute('data-w-id');
-      n.removeAttribute('data-wf-id');
-      n.removeAttribute('id');
-    });
   }
 
   function injectStyles() {
@@ -167,32 +146,6 @@
   if (!chips.length) return bail('Found the bar but zero chips ([data-filter-chip] / .chip)');
   if (!items.length) return bail('Found the list but zero items ([data-filter-item] / .w-dyn-item)');
 
-  /* --- synthesise an "All" chip ------------------------------- */
-  // A static All chip can't live inside the CMS chips list (that element IS
-  // the w-dyn-items container). If [data-filter-all-label] is set, clone the
-  // first chip, strip its category, relabel it, and prepend it to the row.
-
-  var allLabel = bar.getAttribute('data-filter-all-label');
-  var hasExistingAll = chips.some(function (c) { return c.hasAttribute('data-filter-all'); });
-  if (allLabel !== null && !hasExistingAll) {
-    var template = chips[0];
-    var allEl = template.cloneNode(true);
-    stripWebflowIds(allEl);
-    allEl.setAttribute('data-filter-all', '');
-    allEl.setAttribute('data-filter-chip', '');
-    if (allEl.hasAttribute('data-category')) allEl.removeAttribute('data-category');
-    Array.prototype.forEach.call(allEl.querySelectorAll('[data-category]'), function (n) {
-      n.removeAttribute('data-category');
-    });
-    var allFace = faceOf(allEl);
-    allFace.classList.remove(ACTIVE, DISABLED);
-    var textHost = allFace.querySelector('div') || allFace;
-    textHost.textContent = allLabel || 'All';
-    template.parentNode.insertBefore(allEl, template);
-    chips.unshift(allEl);
-    info('synthesised "All" chip labelled "' + (allLabel || 'All') + '"');
-  }
-
   injectStyles();
 
   var empty = document.querySelector('[data-filter-empty]');
@@ -213,10 +166,9 @@
 
   // Only slugs that exist as chips are honoured, so a junk URL can't blank the grid.
   var known = {};
-  var allChip = null;
   chips.forEach(function (chip) {
-    if (isAllChip(chip)) { allChip = chip; return; }
-    known[firstCategoryOf(chip)] = true;
+    var slug = firstCategoryOf(chip);
+    if (slug) known[slug] = true;
   });
 
   // Loud warning for the most common real-world break: chips and cards
@@ -231,7 +183,7 @@
 
   /* --- state -------------------------------------------------- */
 
-  var selected = [];   // empty === All
+  var selected = [];   // empty === show everything
 
   function isSelected(slug) {
     return selected.indexOf(slug) !== -1;
@@ -256,7 +208,7 @@
     });
 
     chips.forEach(function (chip) {
-      var on = isAllChip(chip) ? none : isSelected(firstCategoryOf(chip));
+      var on = isSelected(firstCategoryOf(chip));
       faceOf(chip).classList.toggle(ACTIVE, on);
       chip.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
@@ -322,22 +274,17 @@
   }
 
   chips.forEach(function (chip) {
-    var all    = isAllChip(chip);
-    var slug   = all ? null : firstCategoryOf(chip);
+    var slug   = firstCategoryOf(chip);
     var anchor = anchorOf(chip);
 
     // Static href = "this category on its own", so middle-click and
     // open-in-new-tab still land somewhere sensible.
     if (anchor) {
-      anchor.setAttribute(
-        'href',
-        all ? window.location.pathname : '?' + PARAM + '=' + encodeURIComponent(slug)
-      );
+      anchor.setAttribute('href', '?' + PARAM + '=' + encodeURIComponent(slug));
     }
 
     bind(chip, anchor || faceOf(chip), function () {
-      if (all) selected = [];
-      else toggle(slug);
+      toggle(slug);
       commit();
     });
   });
@@ -359,6 +306,5 @@
   render();
 
   info('ready — ' + chips.length + ' chips, ' + items.length + ' items' +
-       (allChip ? '' : ' (no All chip found)') +
        (clearChip ? '' : ' (no Clear chip found)'));
 })();
