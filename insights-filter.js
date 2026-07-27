@@ -5,25 +5,45 @@
    Multi-select (OR) · no pagination · URL-synced
    e.g. ?category=geo-method,white-label
 
-   Webflow setup — custom attributes:
-     [data-filter-bar]    filter row wrapper       (optional; falls back to .cms_filter-wrapper)
-     [data-filter-list]   posts .w-dyn-items list  (optional; falls back to .u-mb-lg .w-dyn-items)
-     [data-filter-all]    the static "All" chip
-     [data-filter-clear]  the "Clear" chip
-     [data-category]      on each CMS chip AND each post card — bind to the Category slug
-     [data-filter-empty]  optional empty-state element
+   ── Webflow hooks — ALL attribute-driven ─────────────────────
+   Add these custom attributes in the Designer (Element Settings →
+   Custom attributes). Classes are only used as last-resort fallbacks.
 
-   Paste inside <script> tags:
-   Page Settings → Custom Code → Before </body>
+     [data-filter-bar]     the filter row wrapper                 (required)
+     [data-filter-list]    the posts .w-dyn-items container        (required)
+     [data-filter-item]    each post card  (put on the Collection Item)
+     [data-filter-chip]    each category chip
+     [data-filter-all]     the static "All" chip
+     [data-filter-clear]   the "Clear" chip
+     [data-category]       slug — on every chip AND every post card
+     [data-filter-empty]   optional empty-state element
+     [data-filter-debug]   optional, on [data-filter-bar] — verbose logging
+
+   Paste inside <script defer> in
+   Page Settings → Custom Code → Before </body>, or load from CDN.
    ============================================================ */
 
 (function () {
   'use strict';
 
+  var TAG      = '[insights-filter]';
   var PARAM    = 'category';
   var ACTIVE   = 'cc-selected';      // combo class on a selected chip
   var DISABLED = 'cc-disabled';      // combo class on Clear when nothing is selected
   var HIDDEN   = 'is-filtered-out';  // applied to filtered-out items
+
+  /* --- diagnostics -------------------------------------------- */
+  // The old version returned silently when a hook was missing, so a
+  // markup mismatch looked identical to "script never loaded". Now every
+  // bail path shouts, and a successful boot prints a one-line summary.
+
+  var DEBUG = false;  // flipped on if [data-filter-bar] has data-filter-debug
+
+  function warn(msg)  { try { console.warn(TAG + ' ' + msg); } catch (e) {} }
+  function info(msg)  { try { console.info(TAG + ' ' + msg); } catch (e) {} }
+  function debug(msg) { if (DEBUG) { try { console.log(TAG + ' ' + msg); } catch (e) {} } }
+
+  function bail(msg) { warn(msg + ' — filter not initialised.'); }
 
   /* --- helpers ------------------------------------------------ */
 
@@ -70,19 +90,44 @@
 
   /* --- elements ----------------------------------------------- */
 
-  var bar  = document.querySelector('[data-filter-bar], .cms_filter-wrapper');
-  var list = document.querySelector('[data-filter-list], .u-mb-lg .w-dyn-items');
-  if (!bar || !list) return;
+  var bar = document.querySelector('[data-filter-bar]') ||
+            document.querySelector('.cms_filter-wrapper');
+  if (!bar) {
+    return bail('No [data-filter-bar] (and no .cms_filter-wrapper fallback) found');
+  }
+
+  DEBUG = bar.hasAttribute('data-filter-debug');
+
+  var list = document.querySelector('[data-filter-list]') ||
+             document.querySelector('.u-mb-lg .w-dyn-items');
+  if (!list) {
+    return bail('No [data-filter-list] (and no .w-dyn-items fallback) found');
+  }
 
   var clearChip = bar.querySelector('[data-filter-clear]') ||
                   bar.querySelector('.u-ml-auto .chip');
-  var allChip   = null;
 
-  var chips = Array.prototype.slice.call(bar.querySelectorAll('.chip'))
-    .filter(function (chip) { return chip !== clearChip; });
+  // Prefer explicit [data-filter-chip]; fall back to .chip for old markup.
+  var chips = Array.prototype.slice.call(
+    bar.querySelectorAll('[data-filter-chip]')
+  );
+  if (!chips.length) {
+    chips = Array.prototype.slice.call(bar.querySelectorAll('.chip'));
+    if (chips.length) debug('Using .chip fallback — add [data-filter-chip] for reliability.');
+  }
+  chips = chips.filter(function (chip) { return chip !== clearChip; });
 
-  var items = Array.prototype.slice.call(list.querySelectorAll('.w-dyn-item'));
-  if (!chips.length || !items.length) return;
+  // Prefer explicit [data-filter-item]; fall back to .w-dyn-item.
+  var items = Array.prototype.slice.call(
+    list.querySelectorAll('[data-filter-item]')
+  );
+  if (!items.length) {
+    items = Array.prototype.slice.call(list.querySelectorAll('.w-dyn-item'));
+    if (items.length) debug('Using .w-dyn-item fallback — add [data-filter-item] for reliability.');
+  }
+
+  if (!chips.length) return bail('Found the bar but zero chips ([data-filter-chip] / .chip)');
+  if (!items.length) return bail('Found the list but zero items ([data-filter-item] / .w-dyn-item)');
 
   injectStyles();
 
@@ -104,10 +149,21 @@
 
   // Only slugs that exist as chips are honoured, so a junk URL can't blank the grid.
   var known = {};
+  var allChip = null;
   chips.forEach(function (chip) {
     if (isAllChip(chip)) { allChip = chip; return; }
     known[firstCategoryOf(chip)] = true;
   });
+
+  // Loud warning for the most common real-world break: chips and cards
+  // slugify to different strings, so nothing ever matches.
+  var orphanItems = index.filter(function (entry) {
+    return !entry.categories.some(function (slug) { return known[slug]; });
+  }).length;
+  if (orphanItems === items.length) {
+    warn('None of the ' + items.length + ' items carry a category slug that matches any chip. ' +
+         'Check that [data-category] is bound to the SAME slug on both chips and cards.');
+  }
 
   /* --- state -------------------------------------------------- */
 
@@ -147,6 +203,7 @@
     }
 
     empty.classList.toggle('is-visible', shown === 0);
+    debug('render — selected=[' + selected.join(',') + '] showing ' + shown + '/' + items.length);
   }
 
   function syncURL() {
@@ -230,4 +287,8 @@
 
   selected = fromURL();
   render();
+
+  info('ready — ' + chips.length + ' chips, ' + items.length + ' items' +
+       (allChip ? '' : ' (no All chip found)') +
+       (clearChip ? '' : ' (no Clear chip found)'));
 })();
