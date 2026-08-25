@@ -1,7 +1,8 @@
 /* ============================================================
    Hey Taylor — Inline video play/pause
-   Wires the overlay play button to a native <video>, hides the
-   button while playing, and makes the video itself click-to-pause.
+   Keeps the overlay button visible at all times and swaps its
+   Phosphor icon to reflect playback state. Clicking either the
+   button or the video toggles play / pause.
 
    No markup changes needed · works with any number of videos
    per page · never touches data-w-id, so Webflow IX2 hover
@@ -12,15 +13,22 @@
 
      .u-position-relative    wrapper around button + video   (required)
      .play_button-wrapper    the overlay button wrapper      (required)
+     .icon                   the Phosphor <span> inside it   (required)
      .video-component        the <video> element             (required)
 
    The button's inner <a href="#"> is intercepted with
    preventDefault() so the page does not jump to the top.
 
-   ── Behaviour ────────────────────────────────────────────────
-     click button  → video plays, button fades out
-     click video   → toggles play / pause
-     pause / ended → button fades back in
+   ── Icon ─────────────────────────────────────────────────────
+   Only the ph-play / ph-pause token is swapped. Every other class
+   on the span — ph-fill, size variants, colour — is left alone,
+   so the icon keeps whatever styling it was given in the Designer.
+
+   ── Autoplay ─────────────────────────────────────────────────
+   The <video> needs autoplay + muted + playsinline, and a preload
+   other than "none". Browsers refuse to autoplay unmuted video, so
+   if autoplay is blocked the icon simply stays on play and the
+   first click starts it — no special-casing required.
 
    ── Extra (attribute on the wrapper) ─────────────────────────
      [data-video-debug]   verbose per-video console logging.
@@ -35,23 +43,20 @@
   var TAG   = '[inline-video]';
   var WRAP  = '.u-position-relative';
   var BTN   = '.play_button-wrapper';
+  var ICON  = '.icon';
   var VIDEO = '.video-component';
-  var OFF   = 'htv-off';           // hides the button while playing
+  var PLAY  = 'ph-play';
+  var PAUSE = 'ph-pause';
   var BOUND = 'htvBound';          // guards against double-binding
 
   /* --- styles --------------------------------------------------
-     Injected rather than authored in Webflow so the repo stays the
-     single source of truth. Uses a class (not inline styles) so an
-     IX2 hover animation on the button can still win where it sets
-     the same property. */
+     Only a cursor hint; the button stays visible in every state, so
+     nothing here can fight an IX2 animation on it. */
   function injectCss() {
     if (document.getElementById('ht-video-css')) return;
     var s = document.createElement('style');
     s.id = 'ht-video-css';
-    s.textContent =
-      BTN + '{transition:opacity 300ms ease}' +
-      BTN + '.' + OFF + '{opacity:0;pointer-events:none}' +
-      VIDEO + '{cursor:pointer}';
+    s.textContent = VIDEO + '{cursor:pointer}';
     (document.head || document.documentElement).appendChild(s);
   }
 
@@ -74,24 +79,33 @@
       return;
     }
 
-    var trigger = btnWrap.querySelector('a') || btnWrap;
+    var icon = btnWrap.querySelector(ICON);
+    if (!icon) console.warn(TAG, 'no ' + ICON + ' inside button — icon will not swap', btnWrap);
 
-    trigger.addEventListener('click', function (e) {
-      e.preventDefault();            // <a href="#"> would jump to top
-      video.play();
-    });
+    function paint() {
+      if (!icon) return;
+      var playing = !video.paused && !video.ended;
+      icon.classList.toggle(PLAY, !playing);
+      icon.classList.toggle(PAUSE, playing);
+    }
 
-    video.addEventListener('click', function () {
+    function toggle() {
       if (video.paused) video.play();
       else video.pause();
+    }
+
+    (btnWrap.querySelector('a') || btnWrap).addEventListener('click', function (e) {
+      e.preventDefault();            // <a href="#"> would jump to top
+      toggle();
     });
 
-    function hide() { btnWrap.classList.add(OFF); }
-    function show() { btnWrap.classList.remove(OFF); }
+    video.addEventListener('click', toggle);
 
-    video.addEventListener('play',  hide);
-    video.addEventListener('pause', show);
-    video.addEventListener('ended', show);
+    video.addEventListener('play',  paint);
+    video.addEventListener('pause', paint);
+    video.addEventListener('ended', paint);
+
+    paint();                         // autoplay may not have started yet
 
     if (debug) console.log(TAG, 'bound', video.currentSrc || video.src);
   }
