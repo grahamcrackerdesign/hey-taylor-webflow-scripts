@@ -209,9 +209,11 @@
     each(videos, function (v) { bind(v, debug); });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  /* Run on every opportunity rather than picking one. init() and bind()
+     are both idempotent (guarded by the style-tag id and video[BOUND]),
+     so repeat calls are free — and playback then works no matter when
+     the file lands or how the <script> tag is written. */
+  init();
+  document.addEventListener('DOMContentLoaded', init);
+  window.addEventListener('load', init);
 })();
