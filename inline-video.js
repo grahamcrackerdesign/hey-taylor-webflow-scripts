@@ -8,19 +8,29 @@
    per page · never touches data-w-id, so Webflow IX2 hover
    animations on the buttons keep working.
 
-   ── Webflow hooks — class-driven ─────────────────────────────
+   ── Webflow hooks — attribute-driven ─────────────────────────
+   Add these custom attributes in the Designer (Element Settings →
+   Custom attributes). Either the button wrapper or its inner <a>
+   may carry the attribute — both are handled.
+
+     [data-video-play]     the play / pause button          (optional)
+     [data-video-mute]     the mute / unmute button         (optional)
+
+   Falling back to classes when the attributes are absent:
+
+     .play_button-wrapper            a button wrapper
+       + .cc-sound                   marks it as the mute button
+
+   ── Required structure ───────────────────────────────────────
      .u-position-relative    wrapper around buttons + video  (required)
      .video-component        the <video> element             (required)
-     .play_button-wrapper    a button wrapper                (required)
-       + .cc-sound           marks it as the mute button     (optional)
      .icon-color             wrapper around each icon        (optional)
 
-   A .play_button-wrapper WITHOUT .cc-sound is the play button.
-   Each wrapper is expected to contain both of its icons:
+   Each button is expected to contain both of its icons:
 
      play button    .ph-play             shown while paused
                     .ph-pause            shown while playing
-     sound button   .ph-speaker-simple-high    shown while unmuted
+     mute button    .ph-speaker-simple-high    shown while unmuted
                     .ph-speaker-simple-slash   shown while muted
 
    Icons are hidden by adding .htv-hide to their .icon-color parent
@@ -29,7 +39,7 @@
 
    ── Behaviour ────────────────────────────────────────────────
      click play button   → toggles play / pause
-     click sound button  → toggles muted
+     click mute button   → toggles muted
      click video         → toggles play / pause
 
    ── Autoplay ─────────────────────────────────────────────────
@@ -50,12 +60,15 @@
 
   var TAG   = '[inline-video]';
   var WRAP  = '.u-position-relative';
-  var BTN   = '.play_button-wrapper';
-  var SOUND = 'cc-sound';
-  var FACE  = '.icon-color';
   var VIDEO = '.video-component';
+  var FACE  = '.icon-color';
   var HIDE  = 'htv-hide';
   var BOUND = 'htvBound';          // guards against double-binding
+
+  var A_PLAY = '[data-video-play]';
+  var A_MUTE = '[data-video-mute]';
+  var BTN    = '.play_button-wrapper';
+  var SOUND  = 'cc-sound';
 
   var I_PLAY  = '.ph-play';
   var I_PAUSE = '.ph-pause';
@@ -92,6 +105,24 @@
     if (off) face(off).classList.add(HIDE);
   }
 
+  /* The attribute may sit on the wrapper or on the <a> itself. Bind the
+     click to the anchor where there is one, so its href is suppressed. */
+  function clickTarget(el) {
+    if (el.tagName === 'A') return el;
+    return el.querySelector('a') || el;
+  }
+
+  function control(wrap, attr, classFilter) {
+    var el = wrap.querySelector(attr);
+    if (el) return el;
+
+    var found = null;
+    each(wrap.querySelectorAll(BTN), function (b) {
+      if (classFilter(b)) found = b;
+    });
+    return found;
+  }
+
   /* --- diagnostics ---------------------------------------------
      A missing hook used to be indistinguishable from "script never
      loaded", so each failure says which element it could not find. */
@@ -105,14 +136,15 @@
       return;
     }
 
-    var playBtn = null, soundBtn = null;
-    each(wrap.querySelectorAll(BTN), function (b) {
-      if (b.classList.contains(SOUND)) soundBtn = b;
-      else playBtn = b;
+    var playBtn = control(wrap, A_PLAY, function (b) {
+      return !b.classList.contains(SOUND);
+    });
+    var muteBtn = control(wrap, A_MUTE, function (b) {
+      return b.classList.contains(SOUND);
     });
 
-    if (!playBtn && !soundBtn) {
-      console.warn(TAG, 'no ' + BTN + ' inside wrapper — skipping', wrap);
+    if (!playBtn && !muteBtn) {
+      console.warn(TAG, 'found neither ' + A_PLAY + ' nor ' + A_MUTE + ' — skipping', wrap);
       return;
     }
 
@@ -121,8 +153,8 @@
       if (playing) swap(playBtn, I_PAUSE, I_PLAY);
       else         swap(playBtn, I_PLAY,  I_PAUSE);
 
-      if (video.muted) swap(soundBtn, I_OFF, I_ON);
-      else             swap(soundBtn, I_ON,  I_OFF);
+      if (video.muted) swap(muteBtn, I_OFF, I_ON);
+      else             swap(muteBtn, I_ON,  I_OFF);
     }
 
     function togglePlay() {
@@ -131,14 +163,14 @@
     }
 
     if (playBtn) {
-      (playBtn.querySelector('a') || playBtn).addEventListener('click', function (e) {
+      clickTarget(playBtn).addEventListener('click', function (e) {
         e.preventDefault();          // <a href="#"> would jump to top
         togglePlay();
       });
     }
 
-    if (soundBtn) {
-      (soundBtn.querySelector('a') || soundBtn).addEventListener('click', function (e) {
+    if (muteBtn) {
+      clickTarget(muteBtn).addEventListener('click', function (e) {
         e.preventDefault();
         video.muted = !video.muted;  // fires volumechange → paint()
       });
@@ -155,9 +187,9 @@
 
     if (debug) {
       console.log(TAG, 'bound', {
-        src:   video.currentSrc || video.src,
-        play:  !!playBtn,
-        sound: !!soundBtn
+        src:  video.currentSrc || video.src,
+        play: !!playBtn,
+        mute: !!muteBtn
       });
     }
   }
