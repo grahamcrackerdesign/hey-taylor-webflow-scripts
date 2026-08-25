@@ -84,8 +84,12 @@
     if (document.getElementById('ht-video-css')) return;
     var s = document.createElement('style');
     s.id = 'ht-video-css';
+    /* !important because Webflow styles the icon wrapper with a more
+       specific selector (e.g. .button .icon-color{display:flex}), which
+       a bare .htv-hide would lose to. display is not animated by IX2,
+       so forcing it cannot interfere with the buttons' hover states. */
     s.textContent =
-      '.' + HIDE + '{display:none}' +
+      '.' + HIDE + '{display:none!important}' +
       VIDEO + '{cursor:pointer}';
     (document.head || document.documentElement).appendChild(s);
   }
