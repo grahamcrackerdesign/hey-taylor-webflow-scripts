@@ -76,12 +76,24 @@
   // reference field ever becomes multi-reference. Falls back to eyebrow text.
   function categoriesOf(el) {
     var explicit = readCategoryAttr(el);
-    if (explicit === null) {
-      var label = el.querySelector('.eyebrow');
-      explicit = label ? label.textContent : el.textContent;
+
+    // Attribute values are already slugs, which never contain whitespace,
+    // so either separator is safe for a multi-reference field.
+    if (explicit !== null) {
+      return String(explicit)
+        .split(/[,\s]+/)
+        .map(slugify)
+        .filter(Boolean);
     }
-    return String(explicit)
-      .split(/[,\s]+/)
+
+    // Visible text is a human label, where a space is part of the name:
+    // "GEO Method" is ONE category, not "geo" plus "method". Splitting on
+    // whitespace here silently broke every multi-word category. Only a
+    // comma separates categories in the fallback.
+    var label = el.querySelector('.eyebrow');
+    var text = label ? label.textContent : el.textContent;
+    return String(text)
+      .split(',')
       .map(slugify)
       .filter(Boolean);
   }
