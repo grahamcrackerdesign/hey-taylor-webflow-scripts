@@ -58,13 +58,18 @@
       .replace(/^-+|-+$/g, '');
   }
 
-  // data-category may be on the hooked element itself or on a descendant
-  // (Webflow binds it to the inner link, while the filter hook sits on the
-  // Collection Item wrapper). Check both before falling back to visible text.
+  // data-category may sit anywhere on the hooked element's line: on it, below
+  // it, or above it. Both arrangements occur in this site's markup —
+  //   cards: [data-filter-item] wrapper, data-category on the inner <a>
+  //   chips: data-category on the .w-dyn-item, [data-filter-chip] on the <a>
+  // so checking descendants alone left every chip resolving to null, which
+  // filtered to a category nothing matched. Walk up as a last resort.
   function readCategoryAttr(el) {
     if (el.hasAttribute('data-category')) return el.getAttribute('data-category');
     var inner = el.querySelector('[data-category]');
-    return inner ? inner.getAttribute('data-category') : null;
+    if (inner) return inner.getAttribute('data-category');
+    var up = el.parentElement && el.parentElement.closest('[data-category]');
+    return up ? up.getAttribute('data-category') : null;
   }
 
   // Returns an array — an item may carry more than one category if the
