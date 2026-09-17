@@ -12,14 +12,20 @@
  *   #at-market-raw                       location free text (never normalised)
  *   #at-consent                          CASL consent checkbox — do not alter
  *   #at-error #at-submit                 error block, submit button
- *   input[name="goal"]                   5 radios, value = backend value
- *   input[name="platforms_checked"]      6 checkboxes, value on data-value,
- *                                        data-at-exclusive on "Haven't checked yet"
+ *   input[id^="at-goal-"]                5 radios, value = backend value
+ *   input[id^="at-pf-"]                  6 checkboxes, option value on
+ *                                        data-value, data-at-exclusive on
+ *                                        "Haven't checked yet"
  *   #at-agency-name-group #at-agency-name    revealed when goal = agency
  *   #at-industry-other                       revealed when vertical = other
  *   [data-at-label="vertical|footprint|market|platforms"]
  *                                        labels swapped on the agency path
  *   .at-hidden                           display:none, toggled by this script
+ *
+ * Radios and checkboxes are found by id prefix, not by name. Webflow publishes
+ * its own group names for those elements (Radio-Group, Checkbox-1) no matter
+ * what the API sets, so name is not dependable here. It costs nothing: the
+ * payload keys are built in this file, so the rendered name is never read.
  *
  * Load before </body>, or inline in the page embed.
  */
@@ -56,12 +62,12 @@
   }
 
   function goal() {
-    var picked = document.querySelector('input[name="goal"]:checked');
+    var picked = document.querySelector('input[id^="at-goal-"]:checked');
     return picked ? picked.value : "";
   }
 
   function platforms() {
-    var boxes = document.querySelectorAll('input[name="platforms_checked"]:checked');
+    var boxes = document.querySelectorAll('input[id^="at-pf-"]:checked');
     return Array.prototype.map.call(boxes, function (el) {
       /* Webflow reserves the value attribute on checkboxes, so the option value
          lives on data-value. Fall back to value in case that ever changes. */
@@ -94,7 +100,7 @@
      and any other choice clears it. */
   function syncPlatforms(changed) {
     if (!changed || !changed.checked) return;
-    var boxes = document.querySelectorAll('input[name="platforms_checked"]');
+    var boxes = document.querySelectorAll('input[id^="at-pf-"]');
     var isExclusive = changed.hasAttribute("data-at-exclusive");
     Array.prototype.forEach.call(boxes, function (el) {
       if (el === changed) return;
@@ -182,13 +188,13 @@
     if (!form || !btn) return;
 
     Array.prototype.forEach.call(
-      document.querySelectorAll('input[name="goal"]'),
+      document.querySelectorAll('input[id^="at-goal-"]'),
       function (el) { el.addEventListener("change", syncGoal); }
     );
     var vertical = $("at-vertical");
     if (vertical) vertical.addEventListener("change", syncVertical);
     Array.prototype.forEach.call(
-      document.querySelectorAll('input[name="platforms_checked"]'),
+      document.querySelectorAll('input[id^="at-pf-"]'),
       function (el) {
         el.addEventListener("change", function () { syncPlatforms(el); });
       }
