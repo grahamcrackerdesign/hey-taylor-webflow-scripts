@@ -6,6 +6,7 @@ Front-end scripts for the Hey Taylor Webflow site.
 | --- | --- |
 | [`insights-filter.js`](insights-filter.js) | Multi-select category filter for the Insights CMS collection, URL-synced. See [handoff notes](insights-filter-handoff.md). |
 | [`inline-video.js`](inline-video.js) | Overlay play button for inline videos; hides while playing, click video to pause. |
+| [`snapshot-form.js`](snapshot-form.js) | Ask Taylor snapshot form: conditional fields, lead payload, Stripe checkout hand-off. Loaded from the page embed on `/snapshot`. |
 
 Each script is standalone and self-documenting — read the banner comment at
 the top for its required Webflow hooks and where to load it.
